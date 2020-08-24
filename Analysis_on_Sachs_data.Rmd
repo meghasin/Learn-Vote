@@ -1,0 +1,446 @@
+---
+title: "Learning Protein Signalling Network"
+author: "Megha"
+date: "March 7, 2018"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This is a real world application of how Bayesian Network can be used as an analytical tool for various biological data. In the Sachs et al(2005) paper entitled "Causal Protein-Signaling Networks Derived from Multiparameter Single-Cell Data", the authors used Bayesian Networks as a computatinal method on multi-parameter flow cytometry data to reconstruct signaling relationships and predict novel interpathway network causalities. Referring to Scutari, Marco, and Jean-Baptiste Denis's "Bayesian networks: with examples in R" (2014) book, I attempted to re-create to the Sachs et al's derived network and also did some detailed statistical analysis of the results by exploiting the various functions of Marco's bnlearn R package.
+
+```{r include=FALSE, cache=FALSE}
+#loading the packages
+install.packages("bnlearn")
+library(bnlearn)
+source("http://bioconductor.org/biocLite.R")
+biocLite("Rgraphviz")
+library(Rgraphviz)
+library(ggplot2)
+source("https://bioconductor.org/biocLite.R")  ##Use to load gRain package since RBGL is removed from CRAN repository
+biocLite("RBGL")
+library(gRain) 
+library(gRbase)
+```
+```{r}
+#load the observational data
+sachs= read.table("data/sachs.data.txt", header = TRUE)
+#view data
+head(sachs)
+```
+```{r}
+#Exploring monotone transformation, logarithm
+sachs_log=log2(sachs + 1)
+head(sachs_log)
+```
+
+```{r}
+#Building the real network structure(verified from Biological literature surveys)
+sachs.modelstring <- 
+  paste("[PKC][PKA|PKC][praf|PKC:PKA][pmek|PKC:PKA:praf][p44.42|pmek:PKA][pakts473|p44.42:PKA][P38|PKC:PKA][pjnk|PKC:PKA][plcg][PIP3|plcg][PIP2|plcg:PIP3]")
+dag.sachs <- model2network(sachs.modelstring)
+#Plotting the graph
+graphviz.plot(dag.sachs, shape = "ellipse")
+```
+```{r}
+
+#Building the groundtruth network based on literature survey and inference by Karen Sachs et al (2005)
+sachs_groundtruth.modelstring <- 
+  paste("[PKC|PIP2:plcg][PKA|PKC][praf|PKC:PKA][pmek|PKC:PKA:praf][p44.42|pmek:PKA][pakts473|p44.42:PKA:PIP3][P38|PKC:PKA][pjnk|PKC:PKA][plcg][PIP3|plcg][PIP2|plcg:PIP3]")
+dag.sachs_groundtruth <- model2network(sachs_groundtruth.modelstring)
+graphviz.plot(dag.sachs_groundtruth, shape = "ellipse")
+
+
+```
+
+
+## Gaussian Bayesian Network
+Since the data contains molecule concentrations, they are continuous, therefore it is more reasonable approach to use a Gaussian distribution based network to build the protein signalling network. However, the results doesnt show as good as expected.  
+
+```{r}
+sachs =log10(sachs + 1)
+dag.iamb <- inter.iamb(sachs,test="cor")
+narcs(dag.iamb)
+directed.arcs(dag.iamb)
+graphviz.plot(dag.iamb)
+unlist(compare(skeleton(dag.sachs), skeleton(dag.iamb)))
+```
+```{r}
+#Using the log transformed data
+dag.iamb_log <- inter.iamb(sachs_log,test="cor")
+narcs(dag.iamb_log)
+directed.arcs(dag.iamb_log)
+graphviz.plot(dag.iamb_log)
+```
+We can see that DAG has only 8 arcs as compared to expected 17, with only 2 directed. Comparing the two graphs, we get as follows.
+```{r}
+#Compare two DAGs
+unlist(compare(dag.sachs, dag.iamb))
+unlist(compare(skeleton(dag.sachs), skeleton(dag.iamb)))
+```
+
+```{r}
+#Compare two DAGs using the log transformed data
+unlist(compare(dag.sachs, dag.iamb_log))
+unlist(compare(skeleton(dag.sachs), skeleton(dag.iamb_log)))
+```
+The result is not good at all. Both of them seem to have completely different structures. By ignoring the arc-directions, we compare them again. The result is slightly better. The monotonic transformation like logarithm did not improve the result. This could be because of the data, they are strongly skewed, and very close to zero. Data is not normally distributed also and violate GBN assumption. Hence, the approach of Sach et al was to discretized it, perhaps. But even discretization can also lose some ordering information. GBNs seem to be a better approach for these kind of protein concentration data.
+```{r}
+#Compare two (undirected)DAGs
+unlist(compare(skeleton(dag.sachs), skeleton(dag.iamb)))
+```
+
+Why so?
+
+If we do a graphical analysis of the dataset, we will find the distribution of the molecules concentration being strongly skewed. Observing the data, we see that most concentration have very low value and mostly cluster aroud zero.
+
+```{r error=FALSE, warning=FALSE}
+#Extract individual variables in separate dataframe.
+praf<-data.frame(exp_level=sachs[,1])
+pmek<-data.frame(exp_level=sachs[,2])
+plcg<-data.frame(exp_level=sachs[,3])
+PIP2<-data.frame(exp_level=sachs[,4])
+PIP3<-data.frame(exp_level=sachs[,5])
+p44.42<-data.frame(exp_level=sachs[,6])
+pakts473<-data.frame(exp_level=sachs[,7])
+PKA<-data.frame(exp_level=sachs[,8])
+PKC<-data.frame(exp_level=sachs[,9])
+P38<-data.frame(exp_level=sachs[,10])
+pjnk<-data.frame(exp_level=sachs[,11])
+#Now, we combine the dataframes into one.  We make a new column in each that will be a variable for identification.
+praf$ProteinConcentration<-'praf'
+pmek$ProteinConcentration<-'pmek'
+plcg$ProteinConcentration<-'plcg'
+PIP2$ProteinConcentration<-'PIP2'
+PIP3$ProteinConcentration<-'PIP3'
+p44.42$ProteinConcentration<-'p44.42'
+pakts473$ProteinConcentration<-'pakts473'
+PKA$ProteinConcentration<-'PKA'
+PKC$ProteinConcentration<-'PKC'
+P38$ProteinConcentration<-'P38'
+pjnk$ProteinConcentration<-'pjnk'
+#and combine into your new data frame ProConct
+ProConct <- rbind(praf,pmek,plcg,PIP2,PIP3,p44.42,pakts473,PKA,PKC,P38,pjnk)
+ProConcdf <- data.frame(ProConct)
+#Plotting the combined dataframes
+ggplot(ProConct, aes(exp_level, fill = ProteinConcentration)) + geom_density(alpha = .2)+ xlim(0, 700)
+```
+
+We can see that the variable are not normal, they are not even symmetric. Hence they dont satisfy the distributional assumptions underlying GBNs. We also show that the dependence relationships among the variables are not linear. This causes problem for most conditional independence tests and network scores algorithms which require the linear relationship criteria. So there is a reduction in efficiency to detect arcs in DAG.
+```{r}
+plot(sachs[,9],sachs[,8],xlab="PKC",ylab="PKA")
+```
+
+## Discretisation of Data
+
+Since, the Sachs data is not appropriate for GBNs, they decided to discretise it and use a discrete Bayesian Network, which can handle skewness and non-linear relationship. Since variables are protein concentration levels Sachs et al paper, we use the "discretize" function in bnlearn package. We use the information-preserving discretisation approach introduced by Hartemink(2001) where the variables are jointly discretised while preserving as much pairwise mutual information between the variables as possible.
+```{r}
+#Discretise the raw data
+datamerged=read.csv("data/merged_dataset_sampled.csv", header = TRUE)
+discrete_sachs <- bnlearn::discretize(datamerged, method = "hartemink", breaks = 3, ibreaks =33, idisc = "interval")
+#Renaming the labels
+for (i in names(discrete_sachs))
+  levels(discrete_sachs[, i]) = c("1", "2", "3")
+head(discrete_sachs)
+```
+
+##Model Averaging
+
+According to Sachs et al analysis, they have tried to improve the quality of the BN structure learned from the data by averaging multiple conditional DAGs. A close replication of the approach used by Sach et al is to apply bootstrap resampling to the discretized data. and learn a set of 500 network structures. We learn a DAG with hill-climbing algorithm from each of the 500 bootstrap samples using 'bde' as the scoring function. 
+
+```{r}
+#Using Bootstrap algorithm 
+boot=boot.strength(discrete_sachs, R=500, algorithm= "hc", algorithm.args = list(score="bde",iss=10))
+boot[(boot$strength>0.85) & (boot$direction >=0.5),]
+```
+The returned object called "boot" is a data frame containing strength of all the possible arcs (from boot column) and probability of their direction (from direction column) given that the "from" and "to" nodes are connected by an arc. 
+Arcs are considered significant if they appear in at least 85% of the networks. Since all values in the "direction" column are close to 0.5, the directions are not well established and they probablty are not all score equivalent.
+```{r}
+plot(boot)
+```
+```{r}
+#Averaging the network by considering the arcs above the 85% probability
+avg.boot=averaged.network(boot,threshold = 0.85)
+avg.boot=skeleton(avg.boot)
+#Plotting the Graph
+graphviz.plot(avg.boot)
+
+```
+```{r}
+dsachs <- discretize(sachs, method="hartemink", breaks=3,ibreaks=60,idisc="quantile")
+boot <- boot.strength(dsachs, R=500,algorithm = "hc", algorithm.args = list(score="bde",iss=10))
+avg.boot<- averaged.network(boot, threshold=0.85)
+avg.boot<-skeleton(avg.boot)
+```
+
+
+
+The undirected graph looks like the one learnt from Sachs et al observation data. We can also start from a different DAG, generated randomly from a uniform distribution over a space of connected graph with Ide & Cozman(2002) MCMC algorithm. This excludes any systamatic bias in the learned DAG. Keeping only 1 out of 50 randomly generated DAGs, ensures the search space to be covered fully. The result is similar to the previous one.
+```{r}
+
+cd3cd28 <- read.csv("data/expdata_raw/1. cd3cd28.csv", header = TRUE)
+merged <- log2(merged+1)
+nodes <- names(cd3cd28)
+start <- random.graph(nodes = nodes,method = "ic-dag", num=500, every=50)
+#Using lapply to iterate over the DAG in start list
+#dag.iamb <- inter.iamb(merged,test="cor")
+#netlist<- lapply(start,function(net){pc.stable(merged,test="cor")})
+#netlist<- lapply(start,function(net){inter.iamb(merged,test="cor")})
+netlist<- lapply(start,function(net){inter.iamb(cd3cd28,test="cor")})
+rand<-custom.strength(netlist,nodes = nodes)
+rand[(rand$strength>0.85),]
+```
+```{r}
+avg.start<-averaged.network(rand,threshold = 0.85)
+#avg.start<-skeleton(avg.start)
+graphviz.plot(avg.start)
+unlist(compare(skeleton(dag.sachs), skeleton(avg.start)))
+
+```
+
+Note: We can observe that by changing the value of Threshold value (0.5 - 0.85), there is no change in the results suggesting that they are not sensitive to its value. In order to use a suitable threshold, Scutari & Nagaranjan (2013) has a default value for Threshold already set up in bnlearn's averaged.network function.
+```{r}
+averaged.network(rand)
+```
+
+##Interventional Data
+The data which we worked on so far was observational data collected under general setting. In addition to the general stimuli dataset, there are 9 other dataset, relating to 10 different clues and intervention. We will wish to see the importance of intervention data where the values of the variables in the model are set to specific value by an external intervention.
+The dataset is as follows:
+   
+   
+   
+```{r}
+#Loading interventional data which includes an extra node INT, which represents a protein which is activated or inhibitated. 
+isachs<-read.table("data/sachs.interventional.txt",header = TRUE,colClasses = "factor")
+```
+The purpose of include the INT variable is to make all the 11 protein variables to depend on it. For this we need to join all the nodes to the INT node.
+```{r}
+wh<-matrix(c(rep("INT",11),names(isachs)[1:11]),ncol=2)
+dag.wh<-tabu(isachs,whitelist=wh,score="bde",iss=10,tabu=50)
+graphviz.plot(dag.wh)
+```
+
+Thus with the whitelist, we can join all possible arcs to the INT node. Now using Tabu search, we can find the local optimum DAG, by iterating 50 times.
+
+We try to learn the structure using "tiers2blacklist" function. This function blacklists all the arcs those are going towards INT. a vector of character strings as the labels of nodes, which specifies a complete node ordering, or a list of character vectors, which specifies a partial node ordering. In the latter case, all arcs going from a node in a particular element of the list (sometimes known as tier) to a node in one of the previous elements are blacklisted. Arcs between nodes in the same element are not blacklisted.
+
+```{r}
+tiers<-list("INT",names(isachs)[1:11])
+bl<-tiers2blacklist(nodes=tiers)
+dag.tiers<-tabu(isachs,blacklist=bl,score="bde",iss=1,tabu=50)
+graphviz.plot(dag.tiers)
+```
+
+From both the above graphs, we can see that some of the features of the learned network of the Sachs et al is captured although they do not even closely replicate what they have derived. The probable reason could be because they used a modified BDe score (equivalent to "mbde" in bnlearn), which includes the the intervention effects into score components associated with each node. When we are saying that a node is being intervened, it means that the value of that node is determined by the experimerimenter, not by the other nodes. So, mbde disregards the effects of parents on a controlled node for those observations which are intervened, otherwise it behaves like a standard bde for others.
+We can construct a named list of observations that are manipulated for each node.
+
+```{r}
+#datamerged=read.csv("data/merged_discrete_dataset_new_INT.csv", header = TRUE)
+#datamerged[] <- lapply(datamerged, as.factor)
+INT<-sapply(1:11,function(x){which(isachs$INT==x)})
+
+nodes<-names(isachs)[1:11]
+
+names(INT)<-nodes
+
+start<-random.graph(nodes=nodes,method="melancon",num=500,burn.in=10^5, every=50)
+netlist<-lapply(start,function(net){tabu(isachs[,1:11],score="mbde",exp=INT,iss=1,start=net,tabu=50)})
+
+intscore<-custom.strength(netlist,nodes=nodes,cpdag=FALSE)
+dag.mbde<-averaged.network(intscore, threshold = .7)
+graphviz.plot(dag.mbde)
+
+```
+
+We can see by comparing this result with the validated network from Sachs et al (2005) that all the 17 arcs from the validated network are correctly learned here. The 3 arcs missing from the paper is missing here too. The extra identified arcs found in the mbde network were also found by Sach et al, but were disregared due to low arc strength suggesting that simulated annealing algorithm works better than Tabu search on this dataset.
+
+
+#Querying the learned Network
+
+Sachs et al also queried their validated network to substantiate two claims: 
+
+1. a direct perturbation of p44.42 should influence pakts473
+2. a direct perturbation of p44.42 should not influence PKA. 
+
+Hence we compare the probability distributions of p44.42, pakts473 and PKA with the results of two ad-hoc experiments to con???rm the validity and the direction of the claimed causal in???uences.
+
+```{r}
+isachs<-isachs[,1:11]
+for (i in names(isachs)) 
+  levels(isachs[, i]) = c("LOW", "AVG", "HIGH") 
+fitted = bn.fit(dag.sachs, isachs, method = "bayes")
+#gRain implements exact inference for discrete Bayesian networks via junction tree belief propagation. We can export a network ???tted with bnlearn
+jtree = compile(as.grain(fitted))
+#set the evidence 
+jprop = setFinding(jtree, nodes = "p44.42", states = "LOW")
+#compare conditional and unconditional probabilities
+querygrain(jtree, nodes = "pakts473")$pakts473
+querygrain(jprop, nodes = "pakts473")$pakts473
+
+querygrain(jtree, nodes = "PKA")$PKA
+querygrain(jprop, nodes = "PKA")$PKA
+```
+In the above non-causal setting, the inhibition of p44.42 changes values of both pakts472 and PKA. For a causal setting, we need to remove all biological influences from P44.42/Erk to all other variables. We need to drop all the arcs connecting to the parents of Erk as follows. We can see that concentration of PKA is uneffected here.
+```{r}
+#Building a causal setting
+causal.sachs<-drop.arc(dag.sachs, "PKA","p44.42")
+causal.sachs<-drop.arc(causal.sachs,"pmek","p44.42")
+cfitted<-bn.fit(causal.sachs,isachs,method="bayes")
+cjtree<-compile(as.grain(cfitted))
+cjlow<-setEvidence(cjtree,nodes="p44.42",states="LOW")
+querygrain(cjtree, nodes = "pakts473")$pakts473
+querygrain(cjlow, nodes = "pakts473")$pakts473
+
+querygrain(cjtree, nodes = "PKA")$PKA
+querygrain(cjlow, nodes = "PKA")$PKA
+```
+
+
+
+
+```{r}
+#datamerged = read.table("data/sachs.interventional.txt", header = TRUE,colClasses = "factor")
+datamerged=read.table("data/sachs.interventional.txt",header = TRUE,colClasses = "factor")
+datamerged[] <- lapply(datamerged, as.factor)
+exp1=datamerged[1:600,]
+exp2=datamerged[601:1200,]
+exp3=datamerged[1201:1800,]
+exp4=datamerged[1801:2400,]
+exp5=datamerged[2401:3000,]
+exp6=datamerged[3001:3600,]
+exp7=datamerged[3601:4200,]
+exp8=datamerged[4201:4800,]
+exp9=datamerged[4801:5400,]
+#-------------------------Pooling All------------------------------------------------------------------------
+newcomb=rbind(exp1,exp2,exp3,exp4,exp5,exp6,exp7,exp8,exp9)
+INT_comb<-sapply(1:11,function(x){which(newcomb$INT==x)})
+nodes<-names(newcomb[1:11])
+names(INT_comb)<-nodes
+start = random.graph(nodes = nodes, method="melancon", num = 100, burn.in=10^5, every=100)
+netlist = lapply(start, function(net) {
+    tabu(newcomb[,1:11], score = "mbde", exp=INT_comb, iss = 1, start = net, tabu=50) })
+arcs_comb = custom.strength(netlist, nodes = nodes,
+                       cpdag = FALSE)
+int_comb = averaged.network(arcs_comb, threshold = 0.85)
+#unlist(compare(skeleton(dag.sachs), skeleton(int_comb)))
+unlist(compare((dag.sachs1), (int_comb)))
+graphviz.plot(int_comb)
+
+#-----------------------------------------------------------------------------------------------------------
+
+
+
+#exp1
+INT_comb<-sapply(1:11,function(x){which(exp1$INT==x)})
+nodes<-names(exp1[1:11])
+names(INT_comb)<-nodes
+#start<-random.graph(nodes=nodes,method="melancon",num=500,burn.in=10^5, every=50)
+netlist<-lapply(start,function(net){tabu(exp1[,1:11],score="mbde",exp=INT_comb,iss=1,start=net,tabu=50)})
+arcs_datamerged1 = custom.strength(netlist, nodes = nodes, cpdag = FALSE)
+#-----------------------------------------------------------------------------------------------------------------
+
+#exp2
+INT_comb<-sapply(1:11,function(x){which(exp2$INT==x)})
+nodes<-names(exp2[1:11])
+names(INT_comb)<-nodes
+#start<-random.graph(nodes=nodes,method="melancon",num=500,burn.in=10^5, every=50)
+netlist = lapply(start, function(net){tabu(exp2[,1:11], score = "mbde", exp=INT_comb, iss = 1, start = net, tabu=50) })
+arcs_datamerged2 = custom.strength(netlist, nodes = nodes,  cpdag = FALSE)
+#-----------------------------------------------------------------------------------------------------------------
+
+#exp3
+INT_comb<-sapply(1:11,function(x){which(exp3$INT==x)})
+nodes<-names(exp3[1:11])
+names(INT_comb)<-nodes
+#start<-random.graph(nodes=nodes,method="melancon",num=500,burn.in=10^5, every=50)
+netlist = lapply(start, function(net) {tabu(exp3[,1:11], score = "mbde",  exp=INT_comb, iss = 1, start = net, tabu=50) })
+arcs_datamerged3 = custom.strength(netlist, nodes = nodes,cpdag = FALSE)
+#-----------------------------------------------------------------------------------------------------------------
+
+#exp4
+INT_comb<-sapply(1:11,function(x){which(exp4$INT==x)})
+nodes<-names(exp4[1:11])
+names(INT_comb)<-nodes
+#start<-random.graph(nodes=nodes,method="melancon",num=500,burn.in=10^5, every=50)
+netlist = lapply(start, function(net) {tabu(exp4[,1:11], score = "mbde", exp=INT_comb, iss = 1, start = net, tabu=50) })
+arcs_datamerged4 = custom.strength(netlist, nodes = nodes,  cpdag = FALSE)
+#-----------------------------------------------------------------------------------------------------------------
+
+#exp5
+INT_comb<-sapply(1:11,function(x){which(exp5$INT==x)})
+nodes<-names(exp5[1:11])
+names(INT_comb)<-nodes
+#start<-random.graph(nodes=nodes,method="melancon",num=500,burn.in=10^5, every=50)
+netlist = lapply(start, function(net) {tabu(exp5[,1:11], score = "mbde",  exp=INT_comb, iss = 1, start = net, tabu=50) })
+arcs_datamerged5 = custom.strength(netlist, nodes = nodes,   cpdag = FALSE)
+
+#-----------------------------------------------------------------------------------------------------------------
+
+#exp6
+INT_comb<-sapply(1:11,function(x){which(exp6$INT==x)})
+nodes<-names(exp6[1:11])
+names(INT_comb)<-nodes
+#start<-random.graph(nodes=nodes,method="melancon",num=500,burn.in=10^5, every=50)
+netlist = lapply(start, function(net) {tabu(exp6[,1:11], score = "mbde", exp=INT_comb, iss = 1, start = net, tabu=50) })
+arcs_datamerged6 = custom.strength(netlist, nodes = nodes, cpdag = FALSE)
+#-----------------------------------------------------------------------------------------------------------------
+
+#exp7
+INT_comb<-sapply(1:11,function(x){which(exp7$INT==x)})
+nodes<-names(exp7[1:11])
+names(INT_comb)<-nodes
+#start<-random.graph(nodes=nodes,method="melancon",num=500,burn.in=10^5, every=50)
+netlist = lapply(start, function(net) {tabu(exp7[,1:11], score = "mbde", exp=INT_comb, iss = 1, start = net, tabu=50) })
+arcs_datamerged7 = custom.strength(netlist, nodes = nodes,    cpdag = FALSE)
+#-----------------------------------------------------------------------------------------------------------------
+
+#exp8
+INT_comb<-sapply(1:11,function(x){which(exp8$INT==x)})
+nodes<-names(exp8[1:11])
+names(INT_comb)<-nodes
+#start<-random.graph(nodes=nodes,method="melancon",num=500,burn.in=10^5, every=50)
+netlist = lapply(start, function(net) {tabu(exp8[,1:11], score = "mbde", exp=INT_comb, iss = 1, start = net, tabu=50) })
+arcs_datamerged8 = custom.strength(netlist, nodes = nodes, cpdag = FALSE)
+
+#----------------------------------------------------------------------------------------------------------------
+
+#exp9
+INT_comb<-sapply(1:11,function(x){which(exp9$INT==x)})
+nodes<-names(exp9[1:11])
+names(INT_comb)<-nodes
+#start<-random.graph(nodes=nodes,method="melancon",num=500,burn.in=10^5, every=50)
+netlist = lapply(start, function(net) {tabu(exp9[,1:11], score = "mbde",  exp=INT_comb, iss = 1, start = net, tabu=50) })
+arcs_datamerged9 = custom.strength(netlist, nodes = nodes, cpdag = FALSE)
+
+#-----------------------------------------------------------------------------------------------------------------
+
+#obs
+obs=rbind(exp2,exp7,exp9)
+INT_comb<-sapply(1:11,function(x){which(obs$INT==x)})
+nodes<-names(obs[1:11])
+names(INT_comb)<-nodes
+#start<-random.graph(nodes=nodes,method="melancon",num=500,burn.in=10^5, every=50)
+netlist = lapply(start, function(net) {tabu(obs[,1:11], score = "mbde", exp=INT_comb, iss = 1, start = net, tabu=50) })
+arcs_obs = custom.strength(netlist, nodes = nodes, cpdag = FALSE)
+#-----------------------------------------------------------------------------------------------------------------
+```
+
+
+```{r}
+#average
+intscore_combgmt=arcs_datamerged1
+intscore_combgmt[,3]=intscore_combgmt[,3]  +arcs_datamerged3[,3]+arcs_datamerged4[,3]+arcs_datamerged5[,3]+arcs_datamerged6[,3]+arcs_datamerged8[,3]+arcs_obs[,3]
+intscore_combgmt[,4]=intscore_combgmt[,4]+arcs_datamerged3[,4]+arcs_datamerged4[,4]+arcs_datamerged5[,4]+arcs_datamerged6[,4]+arcs_datamerged8[,4]+arcs_obs[,4]
+intscore_combgmt[,4]=intscore_combgmt[,4]/7
+intscore_combgmt[,3]=intscore_combgmt[,3]/7
+
+A=averaged.network(intscore_combgmt,threshold = 0.2)
+#unlist(compare(skeleton(dag.sachs), skeleton(A)))
+unlist(compare(skeleton(dag.sachs_groundtruth), skeleton(A)))
+```
+
