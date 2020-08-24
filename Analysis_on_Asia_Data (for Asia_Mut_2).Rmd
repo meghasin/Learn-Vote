@@ -48,7 +48,6 @@ netlist<-lapply(start,function(net){tabu(asia_mut1[1:8],score="mbde",exp=INT,iss
 intscore<-custom.strength(netlist,nodes=nodes,cpdag=FALSE)
 dag.mbde<-averaged.network(intscore, threshold = .7)
 graphviz.plot(dag.mbde) 
-
 ```
 ```{r}
 unlist(compare((dag_asia), (dag.mbde)))
@@ -87,7 +86,8 @@ intscore_pooled[,4]=intscore_pooled[,4] + arcs_mut1[,4]
 intscore_pooled[,3]=intscore_pooled[,3]/2
 intscore_pooled[,4]=intscore_pooled[,4]/2
 
-dag.asia.pooled=averaged.network(intscore_pooled,threshold = 0.2)
+dag.asia.pooled=averaged.network(intscore_pooled,threshold = 0.5)
+graphviz.plot(dag.asia.pooled)
 ```
 
 ```{r}

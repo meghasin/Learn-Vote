@@ -70,5 +70,55 @@ asia_mut1_exp$INT = Int_col
 ```{r}
 #Combining observation and experiment into one dataframe
 asia_mut1 = rbind(asia_mut1_obs, asia_mut1_exp)
-write.csv(asia_mut1,"data/Asia data/asia_mut1.csv")
+write.csv(asia_mut1,"data/Asia data/asia_mut1.csv",row.names=FALSE)
+```
+
+
+Simulating data for with one observational and two interventinal experiments.
+```{r}
+#Sampling some observational data points from asia dataset
+asia_mut2_obs = asia[sample(nrow(asia), 1200), ]
+
+#intitializing additional column for Intervened target
+Int_col = 0
+
+#Adding the INT column
+asia_mut2_obs$INT = Int_col 
+```
+
+Performing queries using gRain package on a mutilated Bayesian Network where we performed a perfect intervention by setting Lung cancer as "Yes" and Tuberculosis as "Yes". 
+
+```{r}
+#Adding perfect intervening at node "L" and fat-hand intervention at node "E"
+asia_mut2_network = mutilated(fitted, evidence = list(L = "no", E = "yes"))
+jmutilated = compile(as.grain(asia_mut2_network))
+
+#Sampling experimental data
+asia_mut2_exp1 = rbn(asia_mut2_network,400)
+
+#Intitializing additional column for the known intervened target L
+Int_col = 4
+
+#Adding the INT column
+asia_mut2_exp1$INT = Int_col
+
+#Adding perfect intervening at node "T"
+asia_mut2_network = mutilated(fitted, evidence = list(T = "yes"))
+jmutilated = compile(as.grain(asia_mut2_network))
+
+
+#Sampling experimental data
+asia_mut2_exp2 = rbn(asia_mut2_network,400)
+
+#Intitializing additional column for the known intervened target L
+Int_col = 3
+
+#Adding the INT column
+asia_mut2_exp2$INT = Int_col
+```
+
+```{r}
+#Combining observation and experiment into one dataframe
+asia_mut2 = rbind(asia_mut2_obs, asia_mut2_exp1, asia_mut2_exp2)
+write.csv(asia_mut2,"data/Asia data/asia_mut2.csv",row.names=FALSE)
 ```

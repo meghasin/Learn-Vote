@@ -1,4 +1,4 @@
----
+ ---
 title: "Learning Protein Signalling Network"
 author: "Megha"
 date: "March 7, 2018"
@@ -240,8 +240,18 @@ From both the above graphs, we can see that some of the features of the learned 
 We can construct a named list of observations that are manipulated for each node.
 
 ```{r}
-#datamerged=read.csv("data/merged_discrete_dataset_new_INT.csv", header = TRUE)
-#datamerged[] <- lapply(datamerged, as.factor)
+INT<-sapply(1:11,function(x){which(isachs$INT==x)})
+
+nodes<-names(isachs)[1:11]
+
+names(INT)<-nodes
+
+start<-random.graph(nodes=nodes,method="melancon",num=500,burn.in=10^5, every=50)
+netlist<-lapply(start,function(net){tabu(isachs[,1:11],score="mbde",exp=INT,iss=1,start=net,tabu=50)})
+
+intscore<-custom.strength(netlist,nodes=nodes,cpdag=FALSE)
+dag.mbde<-averaged.network(intscore, threshold = .7)
+graphviz.plot(dag.mbde)#datamerged[] <- lapply(datamerged, as.factor)
 INT<-sapply(1:11,function(x){which(isachs$INT==x)})
 
 nodes<-names(isachs)[1:11]
