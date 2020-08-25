@@ -1,0 +1,94 @@
+---
+title: "Analysis on alarm Data (for alarm_Mut_1)"
+author: "Megha"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r include=FALSE, cache=FALSE}
+#loading the packages
+install.packages("bnlearn")
+library(bnlearn)
+source("http://bioconductor.org/biocLite.R")
+biocLite("Rgraphviz")
+library(Rgraphviz)
+library(ggplot2)
+source("https://bioconductor.org/biocLite.R")  ##Use to load gRain package since RBGL is removed from CRAN repository
+biocLite("RBGL")
+library(gRain) 
+library(gRbase)
+```
+
+```{r}
+# load the data.
+data(alarm)
+# create and plot the network structure.
+dag_alarm_groundtruth = model2network("[A][S][T|A][L|S][B|S][D|B:E][E|T:L][X|E]")
+```
+
+```{r}
+alarm_mut1 <- read.csv("data/Alarm data/alarm_mut1.csv", header = TRUE)
+```
+
+```{r}
+INT<-sapply(1:37,function(x){which(alarm_mut1$INT==x)})
+nodes<-names(alarm_mut1[1:37])
+
+names(INT)<-nodes
+
+start<-random.graph(nodes=nodes,method="melancon",num=500,burn.in=10^5, every=50)
+netlist<-lapply(start,function(net){tabu(alarm_mut1[1:37],score="mbde",exp=INT,iss=1,start=net,tabu=50)})
+
+intscore<-custom.strength(netlist,nodes=nodes,cpdag=FALSE)
+dag_alarm<-averaged.network(intscore, threshold = .7)
+graphviz.plot(dag_alarm) 
+```
+```{r}
+unlist(compare((dag_alarm_groundtruth), (dag_alarm)))
+```
+```{r}
+exp1=alarm_mut1[1:1600,]
+exp2=alarm_mut1[1601:2000,]
+```
+
+```{r}
+#obs
+INT<-sapply(1:8,function(x){which(exp1$INT==x)})
+nodes<-names(exp1[1:8])
+names(INT)<-nodes
+#start<-random.graph(nodes=nodes,method="melancon",num=500,burn.in=10^5, every=50)
+netlist = lapply(start, function(net) {tabu(exp1[,1:8], score = "mbde", exp=INT, iss = 1, start = net, tabu=50) })
+arcs_obs = custom.strength(netlist, nodes = nodes, cpdag = FALSE)
+#-----------------------------------------------------------------------------------------------------------------
+
+#exp1
+INT<-sapply(1:8,function(x){which(exp2$INT==x)})
+nodes<-names(exp2[1:8])
+names(INT)<-nodes
+#start<-random.graph(nodes=nodes,method="melancon",num=500,burn.in=10^5, every=50)
+netlist<-lapply(start,function(net){tabu(exp2[,1:8],score="mbde",exp=INT,iss=1,start=net,tabu=50)})
+arcs_mut1 = custom.strength(netlist, nodes = nodes, cpdag = FALSE)
+#-----------------------------------------------------------------------------------------------------------------
+```
+
+
+```{r}
+#average
+intscore_pooled=arcs_obs
+intscore_pooled[,3]=intscore_pooled[,3]  + arcs_mut1[,3]
+intscore_pooled[,4]=intscore_pooled[,4] + arcs_mut1[,4]
+intscore_pooled[,3]=intscore_pooled[,3]/2
+intscore_pooled[,4]=intscore_pooled[,4]/2
+
+dag.alarm.pooled=averaged.network(intscore_pooled,threshold = 0.5)
+graphviz.plot(dag.alarm.pooled)
+```
+
+```{r}
+unlist(compare((dag_alarm_groundtruth), (dag.alarm.pooled)))
+```

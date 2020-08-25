@@ -1,0 +1,135 @@
+---
+title: "Create Observational and Interventional experiments on Alarm Network"
+author: "Megha"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+In this file, we simulate obseravtional and interventional experiment from the synthetic network alarm from the bnlearn package. We conduct two experiment one generating alarm_mut1 with one intervention amd alarm_mut2 with two intervention. This is done in the same way to replicate the process of Sachs data generation. We also add unknown "fat-hand" intervention by changing values of one or more of the target node's children.
+
+```{r include=FALSE, cache=FALSE}
+#loading the packages
+install.packages("bnlearn")
+library(bnlearn)
+source("http://bioconductor.org/biocLite.R")
+biocLite("Rgraphviz")
+library(Rgraphviz)
+library(ggplot2)
+source("https://bioconductor.org/biocLite.R")  ##Use to load gRain package since RBGL is removed from CRAN repository
+biocLite("RBGL")
+library(gRain) 
+library(gRbase)
+```
+
+```{r}
+# load the alarm dataset.
+data(alarm)
+# create and plot the network structure.
+dag_alarm = model2network(paste0("[HIST|LVF][CVP|LVV][PCWP|LVV][HYP][LVV|HYP:LVF][LVF]",
+  "[STKV|HYP:LVF][ERLO][HRBP|ERLO:HR][HREK|ERCA:HR][ERCA][HRSA|ERCA:HR][ANES]",
+  "[APL][TPR|APL][ECO2|ACO2:VLNG][KINK][MINV|INT:VLNG][FIO2][PVS|FIO2:VALV]",
+  "[SAO2|PVS:SHNT][PAP|PMB][PMB][SHNT|INT:PMB][INT][PRSS|INT:KINK:VTUB][DISC]",
+  "[MVS][VMCH|MVS][VTUB|DISC:VMCH][VLNG|INT:KINK:VTUB][VALV|INT:VLNG]",
+  "[ACO2|VALV][CCHL|ACO2:ANES:SAO2:TPR][HR|CCHL][CO|HR:STKV][BP|CO:TPR]"))
+```
+
+```{r}
+#Sampling some observational data points from alarm dataset
+alarm_mut1_obs1 = alarm[sample(nrow(alarm), 2000), ]
+alarm_mut1_obs2 = alarm[sample(nrow(alarm), 2000), ]
+alarm_mut1_obs3 = alarm[sample(nrow(alarm), 2000), ]
+
+
+#Adding the INT column
+alarm_mut1_obs1 = cbind(alarm_mut1_obs1, INT = 0)
+alarm_mut1_obs2 = cbind(alarm_mut1_obs2, INT = 0)
+alarm_mut1_obs3 = cbind(alarm_mut1_obs3, INT = 0)
+```
+
+```{r}
+#First we start by learning parameters of the Bayesian Network given the DAG
+fitted = bn.fit(dag_alarm, alarm, method = "bayes")
+```
+
+Performing queries using gRain package on a mutilated Bayesian Network where we performed a perfect intervention by setting PMB as "TRUE". This is similar to a lab experiment where we intervene PMB like a knock-out experiment in the real world.
+
+```{r}
+#Adding perfect intervening at node "PMB" and fat-hand intervention at node "SHNT"
+alarm_mut1_network = mutilated(fitted, evidence = list(PMB = "TRUE", SHNT= "HIGH"))
+
+#Sampling experimental data
+alarm_mut1_exp1 = rbn(alarm_mut1_network,2000)
+
+
+#Adding the INT column
+alarm_mut1_exp1 =  cbind(alarm_mut1_exp1, INT = 21)
+
+#---------------------------------------------------------------------------------------
+
+#Adding perfect intervening at node "VTUB"
+alarm_mut1_network = mutilated(fitted, evidence = list(VTUB = "LOW"))
+
+#Sampling experimental data
+alarm_mut1_exp2 = rbn(alarm_mut1_network,2000)
+
+#Adding the INT column
+alarm_mut1_exp2 = cbind(alarm_mut1_exp2 , INT = 36)
+
+#---------------------------------------------------------------------------------------
+
+#Adding perfect intervening at node "VALV" and fat-hand intervention at node "ACO2"
+alarm_mut1_network = mutilated(fitted, evidence = list(VALV = "LOW", ACO2= "NORMAL"))
+
+#Sampling experimental data
+alarm_mut1_exp3 = rbn(alarm_mut1_network,2000)
+
+#Adding the INT column
+alarm_mut1_exp3= cbind(alarm_mut1_exp3 , INT = 34)
+
+#---------------------------------------------------------------------------------------
+
+#Adding perfect intervening at node "ANES" 
+alarm_mut1_network = mutilated(fitted, evidence = list(ANES = "TRUE"))
+
+#Sampling experimental data
+alarm_mut1_exp4 = rbn(alarm_mut1_network,2000)
+
+
+#Adding the INT column
+alarm_mut1_exp4= cbind(alarm_mut1_exp4 , INT = 20)
+
+#---------------------------------------------------------------------------------------
+#Adding perfect intervening at node "ERCA" 
+alarm_mut1_network = mutilated(fitted, evidence = list(ERCA = "TRUE"))
+
+#Sampling experimental data
+alarm_mut1_exp5 = rbn(alarm_mut1_network,2000)
+
+
+#Adding the INT column
+alarm_mut1_exp5 = cbind(alarm_mut1_exp5 , INT = 30)
+
+#---------------------------------------------------------------------------------------
+
+#Adding perfect intervening at node "CCHL" and fat-hand intervention at node "HR"
+alarm_mut1_network = mutilated(fitted, evidence = list(CCHL = "NORMAL", HR= "NORMAL"))
+
+#Sampling experimental data
+alarm_mut1_exp6 = rbn(alarm_mut1_network,2000)
+
+#Adding the INT column
+alarm_mut1_exp6 = cbind(alarm_mut1_exp6 , INT = 27)
+
+```
+
+```{r}
+#Combining observation and experiment into one dataframe
+alarm_mut1 = rbind(alarm_mut1_obs1, alarm_mut1_obs2, alarm_mut1_obs3, alarm_mut1_exp1, alarm_mut1_exp2, alarm_mut1_exp3, alarm_mut1_exp4, alarm_mut1_exp5, alarm_mut1_exp6)
+write.csv(alarm_mut1,"data/Alarm data/alarm_mut1.csv",row.names=FALSE)
+```

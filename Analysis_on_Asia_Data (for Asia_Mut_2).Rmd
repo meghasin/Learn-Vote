@@ -1,5 +1,5 @@
 ---
-title: "Analysis on Asia Data (for Asia_Mut_1)"
+title: "Analysis on Asia Data (for Asia_Mut_2)"
 author: "Megha"
 output:
   html_document: default
@@ -28,68 +28,76 @@ library(gRbase)
 # load the data.
 data(asia)
 # create and plot the network structure.
-dag_asia = model2network("[A][S][T|A][L|S][B|S][D|B:E][E|T:L][X|E]")
+dag_asia_groundtruth = model2network("[A][S][T|A][L|S][B|S][D|B:E][E|T:L][X|E]")
 ```
 
 ```{r}
-asia_mut1 <- read.csv("data/Asia data/asia_mut1.csv", header = TRUE)
+asia_mut2 <- read.csv("data/Asia data/asia_mut2.csv", header = TRUE)
 ```
 
 ```{r}
-INT<-sapply(1:8,function(x){which(asia_mut1$INT==x)})
+INT<-sapply(1:8,function(x){which(asia_mut2$INT==x)})
 
-nodes<-names(asia_mut1[1:8])
+nodes<-names(asia_mut2[1:8])
 
 names(INT)<-nodes
 
 start<-random.graph(nodes=nodes,method="melancon",num=500,burn.in=10^5, every=50)
-netlist<-lapply(start,function(net){tabu(asia_mut1[1:8],score="mbde",exp=INT,iss=1,start=net,tabu=50)})
+netlist<-lapply(start,function(net){tabu(asia_mut2[1:8],score="mbde",exp=INT,iss=1,start=net,tabu=50)})
 
 intscore<-custom.strength(netlist,nodes=nodes,cpdag=FALSE)
-dag.mbde<-averaged.network(intscore, threshold = .7)
-graphviz.plot(dag.mbde) 
+dag_asia<-averaged.network(intscore, threshold = .7)
+graphviz.plot(dag_asia) 
 ```
 ```{r}
-unlist(compare((dag_asia), (dag.mbde)))
+unlist(compare((dag_asia_groundtruth), (dag_asia)))
 ```
 ```{r}
-exp1=asia_mut1[1:1600,]
-exp2=asia_mut1[1601:2000,]
+obs=asia_mut2[1:1200,]
+exp1=asia_mut2[1201:1600,]
+exp2=asia_mut2[1601:2000,]
 ```
 
 ```{r}
 #obs
-INT<-sapply(1:8,function(x){which(exp1$INT==x)})
-nodes<-names(exp1[1:8])
+INT<-sapply(1:8,function(x){which(obs$INT==x)})
+nodes<-names(obs[1:8])
 names(INT)<-nodes
 #start<-random.graph(nodes=nodes,method="melancon",num=500,burn.in=10^5, every=50)
-netlist = lapply(start, function(net) {tabu(exp1[,1:8], score = "mbde", exp=INT, iss = 1, start = net, tabu=50) })
+netlist = lapply(start, function(net) {tabu(obs[,1:8], score = "mbde", exp=INT, iss = 1, start = net, tabu=50) })
 arcs_obs = custom.strength(netlist, nodes = nodes, cpdag = FALSE)
 #-----------------------------------------------------------------------------------------------------------------
 
 #exp1
+INT<-sapply(1:8,function(x){which(exp1$INT==x)})
+nodes<-names(exp1[1:8])
+names(INT)<-nodes
+#start<-random.graph(nodes=nodes,method="melancon",num=500,burn.in=10^5, every=50)
+netlist<-lapply(start,function(net){tabu(exp1[,1:8],score="mbde",exp=INT,iss=1,start=net,tabu=50)})
+arcs_mut1 = custom.strength(netlist, nodes = nodes, cpdag = FALSE)
+#-----------------------------------------------------------------------------------------------------------------
+#exp2
 INT<-sapply(1:8,function(x){which(exp2$INT==x)})
 nodes<-names(exp2[1:8])
 names(INT)<-nodes
 #start<-random.graph(nodes=nodes,method="melancon",num=500,burn.in=10^5, every=50)
 netlist<-lapply(start,function(net){tabu(exp2[,1:8],score="mbde",exp=INT,iss=1,start=net,tabu=50)})
-arcs_mut1 = custom.strength(netlist, nodes = nodes, cpdag = FALSE)
-#-----------------------------------------------------------------------------------------------------------------
+arcs_mut2 = custom.strength(netlist, nodes = nodes, cpdag = FALSE)
 ```
 
 
 ```{r}
 #average
 intscore_pooled=arcs_obs
-intscore_pooled[,3]=intscore_pooled[,3]  + arcs_mut1[,3]
-intscore_pooled[,4]=intscore_pooled[,4] + arcs_mut1[,4]
-intscore_pooled[,3]=intscore_pooled[,3]/2
-intscore_pooled[,4]=intscore_pooled[,4]/2
+intscore_pooled[,3]=intscore_pooled[,3]  + arcs_mut1[,3]+ arcs_mut2[,3]
+intscore_pooled[,4]=intscore_pooled[,4] + arcs_mut1[,4]+ arcs_mut2[,4]
+intscore_pooled[,3]=intscore_pooled[,3]/3
+intscore_pooled[,4]=intscore_pooled[,4]/3
 
 dag.asia.pooled=averaged.network(intscore_pooled,threshold = 0.5)
 graphviz.plot(dag.asia.pooled)
 ```
 
 ```{r}
-unlist(compare((dag_asia), (dag.asia.pooled)))
+unlist(compare((dag_asia_groundtruth), (dag.asia.pooled)))
 ```

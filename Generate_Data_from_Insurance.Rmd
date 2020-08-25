@@ -1,0 +1,124 @@
+---
+title: "Create Observational and Interventional experiments on Asia Network"
+author: "Megha"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+In this file, we simulate obseravtional and interventional experiment from the synthetic network Asia from the bnlearn package. We conduct two experiment one generating asia_mut1 with one intervention amd asia_mut2 with two intervention. This is done in the same way to replicate the process of Sachs data generation. We also add unknown "fat-hand" intervention by changing values of one or more of the target node's children.
+
+```{r include=FALSE, cache=FALSE}
+#loading the packages
+install.packages("bnlearn")
+library(bnlearn)
+source("http://bioconductor.org/biocLite.R")
+biocLite("Rgraphviz")
+library(Rgraphviz)
+library(ggplot2)
+source("https://bioconductor.org/biocLite.R")  ##Use to load gRain package since RBGL is removed from CRAN repository
+biocLite("RBGL")
+library(gRain) 
+library(gRbase)
+```
+
+```{r}
+# load the Asia dataset.
+data(asia)
+# create and plot the network structure.
+dag_asia = model2network("[A][S][T|A][L|S][B|S][D|B:E][E|T:L][X|E]")
+```
+
+```{r}
+#Sampling some observational data points from asia dataset
+asia_mut1_obs = asia[sample(nrow(asia), 1600), ]
+
+#intitializing additional column for Intervened target
+Int_col = 0
+
+#Adding the INT column
+asia_mut1_obs$INT = Int_col
+```
+
+```{r}
+#First we start by learning parameters of the Bayesian Network given the DAG
+fitted = bn.fit(dag_asia, asia, method = "bayes")
+```
+
+Performing queries using gRain package on a mutilated Bayesian Network where we performed a perfect intervention by setting Lung cancer as "Yes". This is similar to a lab experiment where we intervene L like a knock-out experiment in the real world.
+
+```{r}
+#Adding perfect intervening at node "L" and fat-hand intervention at node "E"
+asia_mut1_network = mutilated(fitted, evidence = list(L = "no", E = "yes"))
+jmutilated = compile(as.grain(asia_mut1_network))
+
+#Sampling experimental data
+asia_mut1_exp = rbn(asia_mut1_network,400)
+
+#Intitializing additional column for the known intervened target L
+Int_col = 4
+
+#Adding the INT column
+asia_mut1_exp$INT = Int_col
+```
+
+```{r}
+#Combining observation and experiment into one dataframe
+asia_mut1 = rbind(asia_mut1_obs, asia_mut1_exp)
+write.csv(asia_mut1,"data/Asia data/asia_mut1.csv",row.names=FALSE)
+```
+
+
+Simulating data for with one observational and two interventinal experiments.
+```{r}
+#Sampling some observational data points from asia dataset
+asia_mut2_obs = asia[sample(nrow(asia), 1200), ]
+
+#intitializing additional column for Intervened target
+Int_col = 0
+
+#Adding the INT column
+asia_mut2_obs$INT = Int_col 
+```
+
+Performing queries using gRain package on a mutilated Bayesian Network where we performed a perfect intervention by setting Lung cancer as "Yes" and Tuberculosis as "Yes". 
+
+```{r}
+#Adding perfect intervening at node "L" and fat-hand intervention at node "E"
+asia_mut2_network = mutilated(fitted, evidence = list(L = "no", E = "yes"))
+jmutilated = compile(as.grain(asia_mut2_network))
+
+#Sampling experimental data
+asia_mut2_exp1 = rbn(asia_mut2_network,400)
+
+#Intitializing additional column for the known intervened target L
+Int_col = 4
+
+#Adding the INT column
+asia_mut2_exp1$INT = Int_col
+
+#Adding perfect intervening at node "T"
+asia_mut2_network = mutilated(fitted, evidence = list(T = "yes"))
+jmutilated = compile(as.grain(asia_mut2_network))
+
+
+#Sampling experimental data
+asia_mut2_exp2 = rbn(asia_mut2_network,400)
+
+#Intitializing additional column for the known intervened target L
+Int_col = 3
+
+#Adding the INT column
+asia_mut2_exp2$INT = Int_col
+```
+
+```{r}
+#Combining observation and experiment into one dataframe
+asia_mut2 = rbind(asia_mut2_obs, asia_mut2_exp1, asia_mut2_exp2)
+write.csv(asia_mut2,"data/Asia data/asia_mut2.csv",row.names=FALSE)
+```

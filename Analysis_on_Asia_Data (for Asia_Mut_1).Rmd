@@ -28,7 +28,7 @@ library(gRbase)
 # load the data.
 data(asia)
 # create and plot the network structure.
-dag_asia = model2network("[A][S][T|A][L|S][B|S][D|B:E][E|T:L][X|E]")
+dag_asia_groundtruth = model2network("[A][S][T|A][L|S][B|S][D|B:E][E|T:L][X|E]")
 ```
 
 ```{r}
@@ -46,11 +46,11 @@ start<-random.graph(nodes=nodes,method="melancon",num=500,burn.in=10^5, every=50
 netlist<-lapply(start,function(net){tabu(asia_mut1[1:8],score="mbde",exp=INT,iss=1,start=net,tabu=50)})
 
 intscore<-custom.strength(netlist,nodes=nodes,cpdag=FALSE)
-dag.mbde<-averaged.network(intscore, threshold = .7)
-graphviz.plot(dag.mbde) 
+dag_asia<-averaged.network(intscore, threshold = .7)
+graphviz.plot(dag_asia) 
 ```
 ```{r}
-unlist(compare((dag_asia), (dag.mbde)))
+unlist(compare((dag_asia_groundtruth), (dag_asia)))
 ```
 ```{r}
 exp1=asia_mut1[1:1600,]
@@ -91,5 +91,5 @@ graphviz.plot(dag.asia.pooled)
 ```
 
 ```{r}
-unlist(compare((dag_asia), (dag.asia.pooled)))
+unlist(compare((dag_asia_groundtruth), (dag.asia.pooled)))
 ```
