@@ -1,5 +1,5 @@
 ---
-title: "Create Observational and Interventional experiments on Asia Network"
+title: "Create Observational and Interventional experiments on insurance Network"
 author: "Megha"
 output:
   html_document: default
@@ -11,7 +11,7 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-In this file, we simulate obseravtional and interventional experiment from the synthetic network Asia from the bnlearn package. We conduct two experiment one generating asia_mut1 with one intervention amd asia_mut2 with two intervention. This is done in the same way to replicate the process of Sachs data generation. We also add unknown "fat-hand" intervention by changing values of one or more of the target node's children.
+In this file, we simulate obseravtional and interventional experiment from the synthetic network insurance from the bnlearn package. We conduct two experiment one generating insurance_mut1 with one intervention amd insurance_mut2 with two intervention. This is done in the same way to replicate the process of Sachs data generation. We also add unknown "fat-hand" intervention by changing values of one or more of the target node's children.
 
 ```{r include=FALSE, cache=FALSE}
 #loading the packages
@@ -28,97 +28,253 @@ library(gRbase)
 ```
 
 ```{r}
-# load the Asia dataset.
-data(asia)
+# load the insurance dataset.
+data(insurance)
 # create and plot the network structure.
-dag_asia = model2network("[A][S][T|A][L|S][B|S][D|B:E][E|T:L][X|E]")
+dag_insurance = model2network(paste0("[Age][Mileage][SocioEcon|Age][GoodStudent|Age:SocioEcon]",
+  "[RiskAversion|Age:SocioEcon][OtherCar|SocioEcon][VehicleYear|SocioEcon:RiskAversion]",
+  "[MakeModel|SocioEcon:RiskAversion][SeniorTrain|Age:RiskAversion]",
+  "[HomeBase|SocioEcon:RiskAversion][AntiTheft|SocioEcon:RiskAversion]",
+  "[RuggedAuto|VehicleYear:MakeModel][Antilock|VehicleYear:MakeModel]",
+  "[DrivingSkill|Age:SeniorTrain][CarValue|VehicleYear:MakeModel:Mileage]",
+  "[Airbag|VehicleYear:MakeModel][DrivQuality|RiskAversion:DrivingSkill]",
+  "[Theft|CarValue:HomeBase:AntiTheft][Cushioning|RuggedAuto:Airbag]",
+  "[DrivHist|RiskAversion:DrivingSkill][Accident|DrivQuality:Mileage:Antilock]",
+  "[ThisCarDam|RuggedAuto:Accident][OtherCarCost|RuggedAuto:Accident]",
+  "[MedCost|Age:Accident:Cushioning][ILiCost|Accident]",
+  "[ThisCarCost|ThisCarDam:Theft:CarValue][PropCost|ThisCarCost:OtherCarCost]"))
 ```
 
 ```{r}
-#Sampling some observational data points from asia dataset
-asia_mut1_obs = asia[sample(nrow(asia), 1600), ]
+#Sampling some observational data points from insurance dataset
+insurance_mut1_obs = insurance[sample(nrow(insurance), 1000), ]
 
 #intitializing additional column for Intervened target
 Int_col = 0
 
 #Adding the INT column
-asia_mut1_obs$INT = Int_col
+insurance_mut1_obs$INT = Int_col
 ```
 
 ```{r}
 #First we start by learning parameters of the Bayesian Network given the DAG
-fitted = bn.fit(dag_asia, asia, method = "bayes")
+fitted = bn.fit(dag_insurance, insurance, method = "bayes")
 ```
 
-Performing queries using gRain package on a mutilated Bayesian Network where we performed a perfect intervention by setting Lung cancer as "Yes". This is similar to a lab experiment where we intervene L like a knock-out experiment in the real world.
+Performing queries using gRain package on a mutilated Bayesian Network where we performed a perfect intervention by setting Age as "Adult". This is similar to a lab experiment where we intervene L like a knock-out experiment in the real world.
 
 ```{r}
-#Adding perfect intervening at node "L" and fat-hand intervention at node "E"
-asia_mut1_network = mutilated(fitted, evidence = list(L = "no", E = "yes"))
-jmutilated = compile(as.grain(asia_mut1_network))
+#Adding perfect intervening at node "Age" and fat-hand intervention at node "SocioEcon"
+insurance_mut1_network = mutilated(fitted, evidence = list(Age = "Adult", SocioEcon = "Middle"))
+jmutilated = compile(as.grain(insurance_mut1_network))
 
 #Sampling experimental data
-asia_mut1_exp = rbn(asia_mut1_network,400)
+insurance_mut1_exp1 = rbn(insurance_mut1_network,1000)
 
-#Intitializing additional column for the known intervened target L
-Int_col = 4
+#Intitializing additional column for the known intervened target
+Int_col = 2
 
 #Adding the INT column
-asia_mut1_exp$INT = Int_col
+insurance_mut1_exp1$INT = Int_col
 ```
+```{r}
+#Adding perfect intervening at node "DrivingSkill" and fat-hand intervention at node "DrivQuality"
+insurance_mut1_network = mutilated(fitted, evidence = list(DrivingSkill = "SubStandard", DrivQuality = "Poor"))
+jmutilated = compile(as.grain(insurance_mut1_network))
+
+#Sampling experimental data
+insurance_mut1_exp2 = rbn(insurance_mut1_network,1000)
+
+#Intitializing additional column for the known intervened target
+Int_col = 13
+
+#Adding the INT column
+insurance_mut1_exp2$INT = Int_col
+```
+```{r}
+#Adding perfect intervening at node "MakeModel" 
+insurance_mut1_network = mutilated(fitted, evidence = list(MakeModel = "Economy"))
+jmutilated = compile(as.grain(insurance_mut1_network))
+
+#Sampling experimental data
+insurance_mut1_exp3 = rbn(insurance_mut1_network,1000)
+
+#Intitializing additional column for the known intervened target
+Int_col = 9
+
+#Adding the INT column
+insurance_mut1_exp3$INT = Int_col
+```
+```{r}
+#Adding perfect intervening at node "Accident" 
+insurance_mut1_network = mutilated(fitted, evidence = list(Accident = "Mild"))
+jmutilated = compile(as.grain(insurance_mut1_network))
+
+#Sampling experimental data
+insurance_mut1_exp4 = rbn(insurance_mut1_network,1000)
+
+#Intitializing additional column for the known intervened target
+Int_col = 8
+
+#Adding the INT column
+insurance_mut1_exp4$INT = Int_col
+```
+```{r}
+#Adding perfect intervening at node "OtherCarCost" 
+insurance_mut1_network = mutilated(fitted, evidence = list(OtherCarCost = "Thousand"))
+jmutilated = compile(as.grain(insurance_mut1_network))
+
+#Sampling experimental data
+insurance_mut1_exp5 = rbn(insurance_mut1_network,1000)
+
+#Intitializing additional column for the known intervened target
+Int_col = 21
+
+#Adding the INT column
+insurance_mut1_exp5$INT = Int_col
+```
+
 
 ```{r}
 #Combining observation and experiment into one dataframe
-asia_mut1 = rbind(asia_mut1_obs, asia_mut1_exp)
-write.csv(asia_mut1,"data/Asia data/asia_mut1.csv",row.names=FALSE)
+insurance_mut1 = rbind(insurance_mut1_obs, insurance_mut1_exp1, insurance_mut1_exp2, insurance_mut1_exp3, insurance_mut1_exp4, insurance_mut1_exp5)
+write.csv(insurance_mut1,"data/insurance data/insurance_mut1.csv",row.names=FALSE)
 ```
 
 
 Simulating data for with one observational and two interventinal experiments.
 ```{r}
-#Sampling some observational data points from asia dataset
-asia_mut2_obs = asia[sample(nrow(asia), 1200), ]
+#Sampling some observational data points from insurance dataset
+insurance_mut2_obs1 = insurance[sample(nrow(insurance), 1000), ]
+insurance_mut2_obs2 = insurance[sample(nrow(insurance), 1000), ]
+insurance_mut2_obs3 = insurance[sample(nrow(insurance), 1000), ]
 
 #intitializing additional column for Intervened target
 Int_col = 0
 
 #Adding the INT column
-asia_mut2_obs$INT = Int_col 
+insurance_mut2_obs1$INT = Int_col 
+insurance_mut2_obs2$INT = Int_col 
+insurance_mut2_obs3$INT = Int_col 
 ```
 
 Performing queries using gRain package on a mutilated Bayesian Network where we performed a perfect intervention by setting Lung cancer as "Yes" and Tuberculosis as "Yes". 
 
 ```{r}
-#Adding perfect intervening at node "L" and fat-hand intervention at node "E"
-asia_mut2_network = mutilated(fitted, evidence = list(L = "no", E = "yes"))
-jmutilated = compile(as.grain(asia_mut2_network))
+#Adding perfect intervening at node "Age" and fat-hand intervention at node "SocioEcon"
+insurance_mut2_network = mutilated(fitted, evidence = list(Age = "Adult", SocioEcon = "Middle"))
+jmutilated = compile(as.grain(insurance_mut2_network))
 
 #Sampling experimental data
-asia_mut2_exp1 = rbn(asia_mut2_network,400)
+insurance_mut2_exp1 = rbn(insurance_mut2_network,1000)
 
-#Intitializing additional column for the known intervened target L
+#Intitializing additional column for the known intervened target
+Int_col = 2
+
+#Adding the INT column
+insurance_mut2_exp1$INT = Int_col
+
+```
+```{r}
+#Adding perfect intervening at node "DrivingSkill" and fat-hand intervention at node "DrivQuality"
+insurance_mut2_network = mutilated(fitted, evidence = list(DrivingSkill = "SubStandard", DrivQuality = "Poor"))
+jmutilated = compile(as.grain(insurance_mut2_network))
+
+#Sampling experimental data
+insurance_mut2_exp2 = rbn(insurance_mut2_network,1000)
+
+#Intitializing additional column for the known intervened target
+Int_col = 13
+
+#Adding the INT column
+insurance_mut2_exp2$INT = Int_col
+```
+```{r}
+#Adding perfect intervening at node "MakeModel" 
+insurance_mut2_network = mutilated(fitted, evidence = list(MakeModel = "Economy"))
+jmutilated = compile(as.grain(insurance_mut2_network))
+
+#Sampling experimental data
+insurance_mut2_exp3 = rbn(insurance_mut2_network,1000)
+
+#Intitializing additional column for the known intervened target
+Int_col = 9
+
+#Adding the INT column
+insurance_mut2_exp3$INT = Int_col
+```
+```{r}
+#Adding perfect intervening at node "Mileage" and fat-hand intervention at "CarValue"
+insurance_mut2_network = mutilated(fitted, evidence = list(Mileage = "Domino", CarValue = "TenThou"))
+jmutilated = compile(as.grain(insurance_mut2_network))
+
+#Sampling experimental data
+insurance_mut2_exp4 = rbn(insurance_mut2_network,1000)
+
+#Intitializing additional column for the known intervened target
+Int_col = 11
+
+#Adding the INT column
+insurance_mut2_exp4$INT = Int_col
+```
+```{r}
+#Adding perfect intervening at node "AntiTheft" 
+insurance_mut2_network = mutilated(fitted, evidence = list(AntiTheft = "True"))
+jmutilated = compile(as.grain(insurance_mut2_network))
+
+#Sampling experimental data
+insurance_mut2_exp5 = rbn(insurance_mut2_network,1000)
+
+#Intitializing additional column for the known intervened target
+Int_col = 19
+
+#Adding the INT column
+insurance_mut2_exp5$INT = Int_col
+```
+```{r}
+#Adding perfect intervening at node "Airbag" 
+insurance_mut2_network = mutilated(fitted, evidence = list(Airbag = "True"))
+jmutilated = compile(as.grain(insurance_mut2_network))
+
+#Sampling experimental data
+insurance_mut2_exp6 = rbn(insurance_mut2_network,1000)
+
+#Intitializing additional column for the known intervened target
+Int_col = 25
+
+#Adding the INT column
+insurance_mut2_exp6$INT = Int_col
+```
+```{r}
+#Adding perfect intervening at node "RiskAversion" 
+insurance_mut2_network = mutilated(fitted, evidence = list(RiskAversion = "Normal"))
+jmutilated = compile(as.grain(insurance_mut2_network))
+
+#Sampling experimental data
+insurance_mut2_exp7 = rbn(insurance_mut2_network,1000)
+
+#Intitializing additional column for the known intervened target
 Int_col = 4
 
 #Adding the INT column
-asia_mut2_exp1$INT = Int_col
-
-#Adding perfect intervening at node "T"
-asia_mut2_network = mutilated(fitted, evidence = list(T = "yes"))
-jmutilated = compile(as.grain(asia_mut2_network))
-
+insurance_mut2_exp7$INT = Int_col
+```
+```{r}
+#Adding perfect intervening at node "SeniorTrain" 
+insurance_mut2_network = mutilated(fitted, evidence = list(SeniorTrain = "True"))
+jmutilated = compile(as.grain(insurance_mut2_network))
 
 #Sampling experimental data
-asia_mut2_exp2 = rbn(asia_mut2_network,400)
+insurance_mut2_exp8 = rbn(insurance_mut2_network,1000)
 
-#Intitializing additional column for the known intervened target L
-Int_col = 3
+#Intitializing additional column for the known intervened target
+Int_col = 14
 
 #Adding the INT column
-asia_mut2_exp2$INT = Int_col
+insurance_mut2_exp8$INT = Int_col
 ```
-
 ```{r}
 #Combining observation and experiment into one dataframe
-asia_mut2 = rbind(asia_mut2_obs, asia_mut2_exp1, asia_mut2_exp2)
-write.csv(asia_mut2,"data/Asia data/asia_mut2.csv",row.names=FALSE)
+insurance_mut2 = rbind(insurance_mut2_obs1, insurance_mut2_obs2, insurance_mut2_obs3, insurance_mut2_exp1, insurance_mut2_exp2, insurance_mut2_exp3, insurance_mut2_exp4, insurance_mut2_exp5, insurance_mut2_exp6, insurance_mut2_exp7, insurance_mut2_exp8)
+write.csv(insurance_mut2,"data/insurance data/insurance_mut2.csv",row.names=FALSE)
 ```
